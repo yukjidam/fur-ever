@@ -79,6 +79,8 @@ class _HomeScreenState extends State<HomeScreen>
 
   bool isAnimating = false;
 
+  double swipeDirection = 1; // ✅ FIX: lock direction
+
   final List<_HeartParticle> hearts = [];
   final List<_CryParticle> cries = [];
 
@@ -101,7 +103,7 @@ class _HomeScreenState extends State<HomeScreen>
 
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 200),
+      duration: const Duration(milliseconds: 320),
     );
 
     _anim = CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic);
@@ -129,7 +131,7 @@ class _HomeScreenState extends State<HomeScreen>
 
     setState(() {
       isAnimating = true;
-      x = direction * 420;
+      swipeDirection = direction; // ✅ FIX
       rotation = direction * 0.35;
     });
 
@@ -140,6 +142,12 @@ class _HomeScreenState extends State<HomeScreen>
     }
 
     _controller.forward(from: 0);
+  }
+
+  double _exitX(double direction) {
+    final progress = _anim.value;
+    final target = direction * 500;
+    return target * Curves.easeOutCubic.transform(progress);
   }
 
   void spawnHearts() {
@@ -230,16 +238,14 @@ class _HomeScreenState extends State<HomeScreen>
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        toolbarHeight: 90, // 🔥 FIX: adds breathing space under status bar
+        toolbarHeight: 90,
         systemOverlayStyle: const SystemUiOverlayStyle(
           statusBarColor: Colors.transparent,
           statusBarIconBrightness: Brightness.dark,
           statusBarBrightness: Brightness.light,
         ),
-
         title: const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.end,
           children: [
             Text(
               "Hi there, Dagol 🐶",
@@ -256,7 +262,6 @@ class _HomeScreenState extends State<HomeScreen>
             ),
           ],
         ),
-
         actions: [
           IconButton(
             icon: const Icon(Icons.favorite_border, color: Colors.pinkAccent),
@@ -290,24 +295,7 @@ class _HomeScreenState extends State<HomeScreen>
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: const [
-                  Text(
-                    "‹ Pass",
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black45,
-                    ),
-                  ),
-                  Text(
-                    "Like ›",
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black45,
-                    ),
-                  ),
-                ],
+                children: const [Text("‹ Pass"), Text("Like ›")],
               ),
             ),
 
@@ -334,48 +322,64 @@ class _HomeScreenState extends State<HomeScreen>
                     });
                   }
                 },
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    Transform.scale(
-                      scale: liveScale,
-                      child: Opacity(
-                        opacity: liveOpacity,
-                        child: _buildCard(nextPet, size),
-                      ),
-                    ),
-                    Transform.translate(
-                      offset: Offset(x, 0),
-                      child: Transform.rotate(
-                        angle: rotation,
-                        child: _buildCard(currentPet, size),
-                      ),
-                    ),
-                    ...hearts.map(
-                      (h) => Positioned(
-                        left: size.width / 2 + h.x,
-                        top: size.height / 2 + h.y - 80,
-                        child: Opacity(
-                          opacity: h.opacity.clamp(0, 1),
-                          child: Icon(
-                            Icons.favorite,
-                            size: h.size,
-                            color: Colors.pinkAccent,
+
+                child: AnimatedBuilder(
+                  animation: _anim,
+                  builder: (context, child) {
+                    final direction = swipeDirection; // ✅ FIX
+
+                    final exitX = isAnimating ? _exitX(direction) : x;
+
+                    return Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Transform.scale(
+                          scale: liveScale,
+                          child: Opacity(
+                            opacity: liveOpacity,
+                            child: _buildCard(nextPet, size),
                           ),
                         ),
-                      ),
-                    ),
-                    ...cries.map(
-                      (c) => Positioned(
-                        left: size.width / 2 + c.x,
-                        top: size.height / 2 + c.y - 80,
-                        child: Opacity(
-                          opacity: c.opacity.clamp(0, 1),
-                          child: Text("😭", style: TextStyle(fontSize: c.size)),
+
+                        Transform.translate(
+                          offset: Offset(exitX, 0),
+                          child: Transform.rotate(
+                            angle: rotation,
+                            child: _buildCard(currentPet, size),
+                          ),
                         ),
-                      ),
-                    ),
-                  ],
+
+                        ...hearts.map(
+                          (h) => Positioned(
+                            left: size.width / 2 + h.x,
+                            top: size.height / 2 + h.y - 80,
+                            child: Opacity(
+                              opacity: h.opacity.clamp(0, 1),
+                              child: Icon(
+                                Icons.favorite,
+                                size: h.size,
+                                color: Colors.pinkAccent,
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        ...cries.map(
+                          (c) => Positioned(
+                            left: size.width / 2 + c.x,
+                            top: size.height / 2 + c.y - 80,
+                            child: Opacity(
+                              opacity: c.opacity.clamp(0, 1),
+                              child: Text(
+                                "😭",
+                                style: TextStyle(fontSize: c.size),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ),
             ),
