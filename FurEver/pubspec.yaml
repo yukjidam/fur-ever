@@ -60,7 +60,10 @@ flutter:
     - assets/images/icon.json
     - assets/images/loading.json
     - assets/images/golden-retriever.webp
+    - assets/images/golden-retriever-2.webp
+    - assets/images/golden-retriever-3.webp
     - assets/images/husky.jpg
+    - assets/images/husky-2.jpg
     - assets/images/shih-tzu.webp
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

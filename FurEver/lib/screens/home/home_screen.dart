@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:math';
 import 'package:flutter/services.dart';
+import 'feed_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -45,14 +46,33 @@ class _HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin {
   int currentIndex = 0;
 
-  final List<Map<String, String>> pets = [
+  final List<Map<String, String>> likedUsers = [
+    {
+      "user": "Mosang",
+      "pet": "Golden Retriever",
+      "image": "assets/images/golden-retriever.webp",
+    },
+    {
+      "user": "Choco",
+      "pet": "Shih Tzu",
+      "image": "assets/images/shih-tzu.webp",
+    },
+    {"user": "Bingo", "pet": "Husky", "image": "assets/images/husky.jpg"},
+  ];
+
+  final List<Map<String, dynamic>> pets = [
     {
       "name": "Milo",
       "breed": "Golden Retriever",
       "bio": "Loves running and fetch 🐶",
       "desc":
           "Friendly, gentle, and playful. Milo enjoys outdoor adventures and meeting new friends.",
-      "image": "assets/images/golden-retriever.webp",
+      "location": "Pasig City",
+      "images": [
+        "assets/images/golden-retriever.webp",
+        "assets/images/golden-retriever-2.webp",
+        "assets/images/golden-retriever-3.webp",
+      ],
     },
     {
       "name": "Luna",
@@ -60,7 +80,8 @@ class _HomeScreenState extends State<HomeScreen>
       "bio": "Calm and cuddly 💤",
       "desc":
           "Luna enjoys soft blankets, naps, and staying close to her humans.",
-      "image": "assets/images/shih-tzu.webp",
+      "location": "Makati City",
+      "images": ["assets/images/shih-tzu.webp"],
     },
     {
       "name": "Rocky",
@@ -68,18 +89,22 @@ class _HomeScreenState extends State<HomeScreen>
       "bio": "Energetic explorer ❄️",
       "desc":
           "Rocky loves running, exploring, and outdoor adventures in open spaces.",
-      "image": "assets/images/husky.jpg",
+      "location": "Taguig City",
+      "images": ["assets/images/husky.jpg", "assets/images/husky-2.jpg"],
     },
   ];
 
   int swipeIndex = 0;
+  int imageIndex = 0;
 
   double x = 0;
   double rotation = 0;
 
   bool isAnimating = false;
 
-  double swipeDirection = 1; // ✅ FIX: lock direction
+  double swipeDirection = 1;
+
+  double startX = 0; // ✅ FIX
 
   final List<_HeartParticle> hearts = [];
   final List<_CryParticle> cries = [];
@@ -115,6 +140,7 @@ class _HomeScreenState extends State<HomeScreen>
           x = 0;
           rotation = 0;
           isAnimating = false;
+          imageIndex = 0; // reset image when card changes
         });
       }
     });
@@ -131,7 +157,10 @@ class _HomeScreenState extends State<HomeScreen>
 
     setState(() {
       isAnimating = true;
-      swipeDirection = direction; // ✅ FIX
+      swipeDirection = direction;
+
+      startX = x; // ✅ FIX: capture current position
+
       rotation = direction * 0.35;
     });
 
@@ -145,9 +174,62 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   double _exitX(double direction) {
-    final progress = _anim.value;
+    final progress = Curves.easeOutCubic.transform(_anim.value);
     final target = direction * 500;
-    return target * Curves.easeOutCubic.transform(progress);
+
+    // ✅ FIX: smooth interpolation from current drag position
+    return startX + (target - startX) * progress;
+  }
+
+  void _showLikesPanel() {
+    final currentPet = pets[swipeIndex];
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                "Pets who liked ${currentPet["name"]} ❤️",
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              // 🐶 CLEAN PET-SOCIAL FORMAT
+              for (int i = 0; i < likedUsers.length; i++)
+                ListTile(
+                  leading: ClipRRect(
+                    borderRadius: BorderRadius.circular(30),
+                    child: Image.asset(
+                      likedUsers[i]["image"]!,
+                      width: 45,
+                      height: 45,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  title: Text(
+                    "${likedUsers[i]["user"]} liked ${currentPet["name"]}",
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+
+              const SizedBox(height: 10),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   void spawnHearts() {
@@ -227,10 +309,18 @@ class _HomeScreenState extends State<HomeScreen>
     final currentPet = pets[swipeIndex];
     final nextPet = pets[(swipeIndex + 1) % pets.length];
 
-    final progress = _anim.value;
+    double liveScale;
+    double liveOpacity;
 
-    final liveScale = 0.9 + (0.08 * progress);
-    final liveOpacity = 0.55 + (0.3 * progress);
+    if (isAnimating) {
+      // ✅ FIX: freeze second card during swipe → no bounce/jitter
+      liveScale = 0.95;
+      liveOpacity = 0.8;
+    } else {
+      // idle state (when dragging normally)
+      liveScale = 0.92 + (0.04 * (x.abs() / 150).clamp(0, 1));
+      liveOpacity = 0.65 + (0.25 * (x.abs() / 150).clamp(0, 1));
+    }
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -244,28 +334,47 @@ class _HomeScreenState extends State<HomeScreen>
           statusBarIconBrightness: Brightness.dark,
           statusBarBrightness: Brightness.light,
         ),
-        title: const Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              "Hi there, Dagol 🐶",
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-            ),
-            SizedBox(height: 2),
-            Text(
-              "Let’s find your playmate",
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                color: Colors.black45,
+        title: currentIndex == 1
+            ? const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Newsfeed 📰",
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    "See what’s happening in the pet world",
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.black45,
+                    ),
+                  ),
+                ],
+              )
+            : const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Hi there, Dagol 🐶",
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    "Let’s find your playmate",
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.black45,
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ],
-        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.favorite_border, color: Colors.pinkAccent),
-            onPressed: () {},
+            onPressed: _showLikesPanel,
           ),
         ],
       ),
@@ -287,131 +396,152 @@ class _HomeScreenState extends State<HomeScreen>
       ),
 
       body: SafeArea(
-        child: Column(
+        child: IndexedStack(
+          index: currentIndex,
           children: [
-            const SizedBox(height: 6),
+            Column(
+              children: [
+                const SizedBox(height: 6),
 
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: const [Text("‹ Pass"), Text("Like ›")],
-              ),
-            ),
-
-            const SizedBox(height: 2),
-
-            Expanded(
-              child: GestureDetector(
-                onPanUpdate: (d) {
-                  if (isAnimating) return;
-                  setState(() {
-                    x += d.delta.dx;
-                    rotation = x / 380;
-                  });
-                },
-                onPanEnd: (d) {
-                  if (x > 120) {
-                    swipeCard(1);
-                  } else if (x < -120) {
-                    swipeCard(-1);
-                  } else {
-                    setState(() {
-                      x = 0;
-                      rotation = 0;
-                    });
-                  }
-                },
-
-                child: AnimatedBuilder(
-                  animation: _anim,
-                  builder: (context, child) {
-                    final direction = swipeDirection; // ✅ FIX
-
-                    final exitX = isAnimating ? _exitX(direction) : x;
-
-                    return Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        Transform.scale(
-                          scale: liveScale,
-                          child: Opacity(
-                            opacity: liveOpacity,
-                            child: _buildCard(nextPet, size),
-                          ),
-                        ),
-
-                        Transform.translate(
-                          offset: Offset(exitX, 0),
-                          child: Transform.rotate(
-                            angle: rotation,
-                            child: _buildCard(currentPet, size),
-                          ),
-                        ),
-
-                        ...hearts.map(
-                          (h) => Positioned(
-                            left: size.width / 2 + h.x,
-                            top: size.height / 2 + h.y - 80,
-                            child: Opacity(
-                              opacity: h.opacity.clamp(0, 1),
-                              child: Icon(
-                                Icons.favorite,
-                                size: h.size,
-                                color: Colors.pinkAccent,
-                              ),
-                            ),
-                          ),
-                        ),
-
-                        ...cries.map(
-                          (c) => Positioned(
-                            left: size.width / 2 + c.x,
-                            top: size.height / 2 + c.y - 80,
-                            child: Opacity(
-                              opacity: c.opacity.clamp(0, 1),
-                              child: Text(
-                                "😭",
-                                style: TextStyle(fontSize: c.size),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    );
-                  },
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: const [Text("‹ Pass"), Text("Like ›")],
+                  ),
                 ),
-              ),
+
+                const SizedBox(height: 2),
+
+                Expanded(
+                  child: GestureDetector(
+                    onPanUpdate: (d) {
+                      if (isAnimating) return;
+                      setState(() {
+                        x += d.delta.dx;
+                        rotation = x / 380;
+                      });
+                    },
+                    onPanEnd: (d) {
+                      if (x > 120) {
+                        swipeCard(1);
+                      } else if (x < -120) {
+                        swipeCard(-1);
+                      } else {
+                        setState(() {
+                          x = 0;
+                          rotation = 0;
+                        });
+                      }
+                    },
+                    child: AnimatedBuilder(
+                      animation: _anim,
+                      builder: (context, child) {
+                        final direction = swipeDirection;
+                        final exitX = isAnimating ? _exitX(direction) : x;
+
+                        final currentPet = pets[swipeIndex];
+                        final nextPet = pets[(swipeIndex + 1) % pets.length];
+
+                        double liveScale = isAnimating
+                            ? 0.95
+                            : 0.92 + (0.04 * (x.abs() / 150).clamp(0, 1));
+
+                        double liveOpacity = isAnimating
+                            ? 0.8
+                            : 0.65 + (0.25 * (x.abs() / 150).clamp(0, 1));
+
+                        return Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Transform.scale(
+                              scale: liveScale,
+                              child: Opacity(
+                                opacity: liveOpacity,
+                                child: _buildCard(nextPet, size),
+                              ),
+                            ),
+
+                            Transform.translate(
+                              offset: Offset(exitX, 0),
+                              child: Transform.rotate(
+                                angle: rotation,
+                                child: _buildCard(currentPet, size),
+                              ),
+                            ),
+
+                            // ❤️ HEART PARTICLES (PUT BACK HERE)
+                            ...hearts.map(
+                              (h) => Positioned(
+                                left: size.width / 2 + h.x,
+                                top: size.height / 2 + h.y - 80,
+                                child: Opacity(
+                                  opacity: h.opacity.clamp(0, 1),
+                                  child: Icon(
+                                    Icons.favorite,
+                                    size: h.size,
+                                    color: Colors.pinkAccent,
+                                  ),
+                                ),
+                              ),
+                            ),
+
+                            // 😭 CRY PARTICLES (PUT BACK HERE)
+                            ...cries.map(
+                              (c) => Positioned(
+                                left: size.width / 2 + c.x,
+                                top: size.height / 2 + c.y - 80,
+                                child: Opacity(
+                                  opacity: c.opacity.clamp(0, 1),
+                                  child: Text(
+                                    "😭",
+                                    style: TextStyle(fontSize: c.size),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                ),
+
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 20, top: 10),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      FloatingActionButton(
+                        heroTag: "nope",
+                        backgroundColor: Colors.redAccent,
+                        onPressed: () => swipeCard(-1),
+                        child: const Icon(Icons.close),
+                      ),
+                      const SizedBox(width: 20),
+                      FloatingActionButton(
+                        heroTag: "like",
+                        backgroundColor: Colors.pinkAccent,
+                        onPressed: () => swipeCard(1),
+                        child: const Icon(Icons.favorite),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
 
-            Padding(
-              padding: const EdgeInsets.only(bottom: 20, top: 10),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  FloatingActionButton(
-                    heroTag: "nope",
-                    backgroundColor: Colors.redAccent,
-                    onPressed: () => swipeCard(-1),
-                    child: const Icon(Icons.close),
-                  ),
-                  const SizedBox(width: 20),
-                  FloatingActionButton(
-                    heroTag: "like",
-                    backgroundColor: Colors.pinkAccent,
-                    onPressed: () => swipeCard(1),
-                    child: const Icon(Icons.favorite),
-                  ),
-                ],
-              ),
-            ),
+            const FeedScreen(), // 👈 THIS IS YOUR NEWSFEED TAB
+
+            const Center(child: Text("Chat Page")),
+            const Center(child: Text("Profile Page")),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildCard(Map<String, String> pet, Size size) {
+  Widget _buildCard(Map<String, dynamic> pet, Size size) {
     return Container(
       width: size.width * 0.93,
       height: size.height * 0.65,
@@ -427,10 +557,126 @@ class _HomeScreenState extends State<HomeScreen>
               borderRadius: const BorderRadius.vertical(
                 top: Radius.circular(22),
               ),
-              child: Image.asset(
-                pet["image"]!,
-                fit: BoxFit.cover,
-                width: double.infinity,
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: Image.asset(
+                      (pet["images"] as List<String>)[imageIndex.clamp(
+                        0,
+                        (pet["images"] as List<String>).length - 1,
+                      )],
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                    ),
+                  ),
+
+                  Positioned(
+                    bottom: 10,
+                    left: 0,
+                    right: 0,
+                    child: Center(
+                      child: Builder(
+                        builder: (context) {
+                          final images = pet["images"] as List<String>;
+                          return Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.25),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: List.generate(images.length, (i) {
+                                return Container(
+                                  margin: const EdgeInsets.symmetric(
+                                    horizontal: 3,
+                                  ),
+                                  width: i == imageIndex ? 14 : 6,
+                                  height: 6,
+                                  decoration: BoxDecoration(
+                                    color: i == imageIndex
+                                        ? Colors.white
+                                        : Colors.white.withOpacity(0.4),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                );
+                              }),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+
+                  Positioned(
+                    left: 6,
+                    top: 0,
+                    bottom: 0,
+                    child: Material(
+                      color: Colors.transparent,
+                      shape: const CircleBorder(),
+                      clipBehavior: Clip.antiAlias,
+                      child: InkWell(
+                        customBorder: const CircleBorder(),
+                        splashColor: Colors.white24,
+                        onTap: () {
+                          final images = pet["images"] as List<String>;
+
+                          if (images.length <= 1) return;
+
+                          setState(() {
+                            imageIndex =
+                                (imageIndex - 1 + images.length) %
+                                images.length;
+                          });
+                        },
+                        child: const Padding(
+                          padding: EdgeInsets.all(8.0),
+                          child: Icon(
+                            Icons.arrow_back_ios,
+                            color: Colors.white,
+                            size: 18,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  Positioned(
+                    right: 6,
+                    top: 0,
+                    bottom: 0,
+                    child: Material(
+                      color: Colors.transparent,
+                      shape: const CircleBorder(),
+                      clipBehavior: Clip.antiAlias,
+                      child: InkWell(
+                        customBorder: const CircleBorder(),
+                        splashColor: Colors.white24,
+                        onTap: () {
+                          final images = pet["images"] as List<String>;
+
+                          if (images.length <= 1) return;
+
+                          setState(() {
+                            imageIndex = (imageIndex + 1) % images.length;
+                          });
+                        },
+                        child: const Padding(
+                          padding: EdgeInsets.all(8.0),
+                          child: Icon(
+                            Icons.arrow_forward_ios,
+                            color: Colors.white,
+                            size: 18,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -441,18 +687,58 @@ class _HomeScreenState extends State<HomeScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    pet["name"]!,
-                    style: const TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          pet["name"]!,
+                          style: const TextStyle(
+                            fontSize: 26,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+
+                      const SizedBox(width: 10),
+
+                      Expanded(
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.location_on,
+                                size: 16,
+                                color: Colors.redAccent,
+                              ),
+                              const SizedBox(width: 4),
+                              Flexible(
+                                child: Text(
+                                  pet["location"] ?? "Unknown",
+                                  textAlign: TextAlign.right,
+                                  style: const TextStyle(fontSize: 13),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
+
                   const SizedBox(height: 4),
+
                   Text(pet["breed"]!),
+
                   const SizedBox(height: 6),
+
                   Text(pet["bio"]!),
+
                   const SizedBox(height: 6),
+
                   Expanded(
                     child: Text(
                       pet["desc"]!,
